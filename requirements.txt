@@ -1,0 +1,14 @@
+# Core requirements
+pyspark>=3.4.0
+delta-spark>=2.4.0
+pyyaml>=6.0
+databricks-sdk>=0.8.0
+
+# Additional dependencies
+python-dotenv>=1.0.0
+jsonschema>=4.0.0
+pytest>=7.0.0  # For testing
+
+# Notebook-specific
+ipykernel>=6.0.0
+jupyter>=1.0.0

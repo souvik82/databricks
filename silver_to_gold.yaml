@@ -1,0 +1,106 @@
+job:
+  name: "silver_to_gold_user_analytics"
+  description: "Aggregate Silver data to Gold layer for analytics"
+  
+  unity_catalog:
+    catalog: "prod_catalog"
+    schema: "gold"
+    create_if_not_exists: true
+  
+  source:
+    type: "delta"
+    catalog: "prod_catalog"
+    schema: "silver"
+    table: "user_events"
+    startingVersion: "latest"
+    options:
+      readChangeFeed: "true"
+  
+  transformations:
+    - name: "user_metrics"
+      view: "user_metrics_view"
+      sql: >
+        SELECT
+          user_id,
+          DATE(event_time) as event_date,
+          COUNT(DISTINCT event_id) as event_count,
+          COUNT(DISTINCT CASE WHEN event_type = 'purchase' THEN event_id END) as purchase_count,
+          SUM(total_quantity) as total_items_purchased,
+          SUM(CASE WHEN event_type = 'purchase' THEN total_quantity ELSE 0 END) as purchased_items,
+          MIN(event_time) as first_event_time,
+          MAX(event_time) as last_event_time,
+          current_timestamp() as _gold_processed_time
+        FROM source_view
+        GROUP BY user_id, DATE(event_time)
+    
+    - name: "session_analysis"
+      view: "session_view"
+      sql: >
+        WITH sessionized AS (
+          SELECT
+            user_id,
+            event_time,
+            event_type,
+            LAG(event_time) OVER (PARTITION BY user_id ORDER BY event_time) as prev_event_time,
+            CASE
+              WHEN UNIX_TIMESTAMP(event_time) - UNIX_TIMESTAMP(LAG(event_time) 
+                   OVER (PARTITION BY user_id ORDER BY event_time) > 1800 
+                   OR LAG(event_time) OVER (PARTITION BY user_id ORDER BY event_time) IS NULL
+              THEN 1
+              ELSE 0
+            END as new_session
+          FROM source_view
+        ),
+        session_ids AS (
+          SELECT
+            *,
+            SUM(new_session) OVER (PARTITION BY user_id ORDER BY event_time) as session_id
+          FROM sessionized
+        )
+        SELECT
+          user_id,
+          session_id,
+          MIN(event_time) as session_start,
+          MAX(event_time) as session_end,
+          COUNT(*) as events_in_session,
+          COUNT(DISTINCT event_type) as unique_event_types,
+          COLLECT_LIST(event_type) as event_sequence,
+          current_timestamp() as _gold_processed_time
+        FROM session_ids
+        GROUP BY user_id, session_id
+  
+  target:
+    - type: "delta"
+      table: "user_daily_metrics"
+      load_strategy: "upsert"
+      primary_key: ["user_id", "event_date"]
+      partition_columns: ["event_date"]
+      optimize_settings:
+        auto_optimize: true
+        zorder_columns: ["user_id"]
+    
+    - type: "delta"
+      table: "user_session_analytics"
+      load_strategy: "upsert"
+      primary_key: ["user_id", "session_id"]
+      partition_columns: ["date(session_start)"]
+      optimize_settings:
+        auto_optimize: true
+        zorder_columns: ["user_id"]
+  
+  quality_checks:
+    - name: "metrics_completeness"
+      sql: "SELECT COUNT(*) as null_count FROM user_metrics_view WHERE user_id IS NULL OR event_date IS NULL"
+      threshold: 0
+      action: "fail"
+    
+    - name: "session_integrity"
+      sql: "SELECT COUNT(*) as invalid_sessions FROM session_view WHERE session_start > session_end"
+      threshold: 0
+      action: "fail"
+  
+  checkpoint:
+    - location: "abfss://checkpoints@storage.dfs.core.windows.net/silver_to_gold_metrics"
+      force_reset: false
+    - location: "abfss://checkpoints@storage.dfs.core.windows.net/silver_to_gold_sessions"
+      force_reset: false

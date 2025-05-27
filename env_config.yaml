@@ -1,24 +1,46 @@
 environments:
   dev:
     storage:
-      raw_container: "raw-dev"
-      bronze_container: "bronze-dev"
-      silver_container: "silver-dev"
-      gold_container: "gold-dev"
-      archive_container: "archive-dev"
-      checkpoint_location: "checkpoints-dev"
+      account_name: "devstorage"
+      containers:
+        raw: "raw-dev"
+        archive: "archive-dev"
+        bronze: "bronze-dev"
+        silver: "silver-dev"
+        gold: "gold-dev"
+        checkpoints: "checkpoints-dev"
+        schemas: "schemas-dev"
+    paths:
+      raw: "abfss://${storage.containers.raw}@${storage.account_name}.dfs.core.windows.net"
+      archive: "abfss://${storage.containers.archive}@${storage.account_name}.dfs.core.windows.net"
+      bronze: "abfss://${storage.containers.bronze}@${storage.account_name}.dfs.core.windows.net"
+      silver: "abfss://${storage.containers.silver}@${storage.account_name}.dfs.core.windows.net"
+      gold: "abfss://${storage.containers.gold}@${storage.account_name}.dfs.core.windows.net"
+      checkpoints: "abfss://${storage.containers.checkpoints}@${storage.account_name}.dfs.core.windows.net"
+      schemas: "abfss://${storage.containers.schemas}@${storage.account_name}.dfs.core.windows.net"
     databricks:
       catalog: "dev_catalog"
       schema_prefix: "dev_"
-      
+
   prod:
     storage:
-      raw_container: "raw-prod"
-      bronze_container: "bronze-prod"
-      silver_container: "silver-prod"
-      gold_container: "gold-prod"
-      archive_container: "archive-prod"
-      checkpoint_location: "checkpoints-prod"
+      account_name: "prodstorage"
+      containers:
+        raw: "raw"
+        archive: "archive"
+        bronze: "bronze"
+        silver: "silver"
+        gold: "gold"
+        checkpoints: "checkpoints"
+        schemas: "schemas"
+    paths:
+      raw: "abfss://${storage.containers.raw}@${storage.account_name}.dfs.core.windows.net"
+      archive: "abfss://${storage.containers.archive}@${storage.account_name}.dfs.core.windows.net"
+      bronze: "abfss://${storage.containers.bronze}@${storage.account_name}.dfs.core.windows.net"
+      silver: "abfss://${storage.containers.silver}@${storage.account_name}.dfs.core.windows.net"
+      gold: "abfss://${storage.containers.gold}@${storage.account_name}.dfs.core.windows.net"
+      checkpoints: "abfss://${storage.containers.checkpoints}@${storage.account_name}.dfs.core.windows.net"
+      schemas: "abfss://${storage.containers.schemas}@${storage.account_name}.dfs.core.windows.net"
     databricks:
       catalog: "prod_catalog"
       schema_prefix: ""

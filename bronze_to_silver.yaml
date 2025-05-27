@@ -1,0 +1,100 @@
+job:
+  name: "bronze_to_silver_user_events"
+  description: "Transform data from Bronze to Silver layer with quality checks"
+  
+  unity_catalog:
+    catalog: "prod_catalog"
+    schema: "silver"
+    create_if_not_exists: true
+  
+  source:
+    type: "delta"
+    catalog: "prod_catalog"
+    schema: "bronze"
+    table: "user_events"
+    startingVersion: "latest"  # For Change Data Feed
+    options:
+      readChangeFeed: "true"
+  
+  transformations:
+    - name: "deduplicate"
+      view: "dedup_view"
+      sql: >
+        WITH ranked_events AS (
+          SELECT 
+            *,
+            ROW_NUMBER() OVER (
+              PARTITION BY event_id 
+              ORDER BY _ingestion_time DESC
+            ) as row_num
+          FROM source_view
+        )
+        SELECT * EXCEPT(row_num)
+        FROM ranked_events
+        WHERE row_num = 1
+    
+    - name: "clean_data"
+      view: "clean_view"
+      sql: >
+        SELECT
+          event_id,
+          user_id,
+          event_time,
+          -- Standardize event types
+          CASE 
+            WHEN event_type IN ('click', 'view', 'purchase') THEN event_type
+            ELSE 'other'
+          END as event_type,
+          -- Clean map data
+          MAP_FILTER(properties, (k, v) -> k IS NOT NULL AND v IS NOT NULL) as properties,
+          -- Validate array items
+          FILTER(items, item -> item.item_id IS NOT NULL AND item.quantity > 0) as items,
+          _ingestion_time,
+          _source_file,
+          current_timestamp() as _silver_processed_time
+        FROM dedup_view
+    
+    - name: "add_derived_fields"
+      view: "final_view"
+      sql: >
+        SELECT
+          *,
+          HOUR(event_time) as event_hour,
+          DAYOFWEEK(event_time) as event_day_of_week,
+          SIZE(items) as item_count,
+          REDUCE(
+            items, 
+            0, 
+            (acc, item) -> acc + item.quantity,
+            acc -> acc
+          ) as total_quantity
+        FROM clean_view
+  
+  target:
+    type: "delta"
+    table: "user_events"
+    load_strategy: "upsert"
+    primary_key: ["event_id"]
+    partition_columns: ["date(event_time)"]
+    schema_evolution: true
+    optimize_settings:
+      auto_optimize: true
+      zorder_columns: ["user_id", "event_type"]
+    vacuum:
+      retain_hours: 168
+      enabled: true
+  
+  quality_checks:
+    - name: "null_check"
+      sql: "SELECT COUNT(*) as null_count FROM final_view WHERE event_id IS NULL"
+      threshold: 0
+      action: "fail"  # Options: fail, alert, quarantine
+    
+    - name: "freshness_check"
+      sql: "SELECT DATEDIFF(MINUTE, MAX(event_time), CURRENT_TIMESTAMP()) as minutes_late FROM final_view"
+      threshold: 1440  # 24 hours
+      action: "alert"
+  
+  checkpoint:
+    location: "abfss://checkpoints@storage.dfs.core.windows.net/bronze_to_silver"
+    force_reset: false
