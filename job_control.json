@@ -1,0 +1,19 @@
+{
+  "environment": {
+    "type": "dropdown",
+    "default": "dev",
+    "choices": ["dev", "prod"],
+    "description": "Select environment"
+  },
+  "job_config": {
+    "type": "dropdown",
+    "default": "adls_to_bronze",
+    "choices": ["kafka_to_adls", "adls_to_bronze", "bronze_to_silver", "silver_to_gold"],
+    "description": "Select job configuration"
+  },
+  "force_reprocess": {
+    "type": "checkbox",
+    "default": false,
+    "description": "Force reprocess all data"
+  }
+}

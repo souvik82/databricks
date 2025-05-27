@@ -1,0 +1,98 @@
+job:
+  name: "user_events_adls_to_bronze"
+  description: "Load user events from ADLS to Bronze layer"
+  environment: "{{environment}}"  # Will be replaced by widget value
+  
+  source:
+    type: "adls"
+    path: "raw/user_events/{{date}}"  # Date pattern for partitioning
+    format: "json"
+    schema_ref: "schemas/user_event_schema.json"
+    options:
+      cloudFiles.useNotifications: true
+      cloudFiles.maxFilesPerTrigger: 1000
+      recursiveFileLookup: true
+  
+  transformations:
+    - name: "raw_extract"
+      view: "raw_view"
+      sql: >
+        SELECT 
+          *, 
+          current_timestamp() as _ingestion_time,
+          input_file_name() as _source_file,
+          date(_metadata.file_modification_time) as _processing_date
+        FROM read_files(
+          '${source.path}',
+          format => '${source.format}',
+          recursive => true
+        )
+    
+    - name: "parse_json"
+      view: "parsed_view"
+      sql: >
+        SELECT 
+          *,
+          from_json(value, '{
+            "event_id": "string NOT NULL",
+            "user_id": "string NOT NULL",
+            "event_time": "timestamp NOT NULL",
+            "event_type": "string",
+            "properties": "map<string,string>",
+            "items": "array<struct<item_id:string,quantity:int>>"
+          }') as parsed_value
+        FROM raw_view
+    
+    - name: "flatten_fields"
+      view: "flattened_view"
+      sql: >
+        SELECT 
+          * EXCEPT(value, parsed_value),
+          parsed_value.*
+        FROM parsed_view
+    
+    - name: "final_prep"
+      view: "bronze_final_view"
+      sql: >
+        SELECT
+          event_id,
+          user_id,
+          event_time,
+          event_type,
+          properties,
+          items,
+          _ingestion_time,
+          _source_file,
+          _processing_date
+        FROM flattened_view
+  
+  target:
+    type: "delta"
+    table: "bronze_user_events"
+    schema: "events"
+    load_strategy: "upsert"  # options: append, overwrite, upsert, delete_insert
+    primary_key: ["event_id"]  # Required for upsert/delete_insert
+    partition_columns: ["date(event_time)"]
+    schema_evolution: true
+    optimize_settings:
+      auto_optimize: true
+      zorder_columns: ["user_id"]
+    vacuum:
+      retain_hours: 168
+      enabled: true
+  
+  archive:
+    enabled: true
+    path: "archive/user_events/{{date}}"  # Date pattern
+    format: "parquet"
+    mode: "append"
+    retention_days: 30
+  
+  checkpoint:
+    location: "checkpoints/adls_to_bronze/{{date}}"
+    force_reset: "{{force_reprocess}}"  # Will be replaced by widget value
+  
+  controls:
+    max_files_per_run: 10000
+    max_duration_minutes: 120
+    notify_on_failure: true

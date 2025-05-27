@@ -1,0 +1,24 @@
+environments:
+  dev:
+    storage:
+      raw_container: "raw-dev"
+      bronze_container: "bronze-dev"
+      silver_container: "silver-dev"
+      gold_container: "gold-dev"
+      archive_container: "archive-dev"
+      checkpoint_location: "checkpoints-dev"
+    databricks:
+      catalog: "dev_catalog"
+      schema_prefix: "dev_"
+      
+  prod:
+    storage:
+      raw_container: "raw-prod"
+      bronze_container: "bronze-prod"
+      silver_container: "silver-prod"
+      gold_container: "gold-prod"
+      archive_container: "archive-prod"
+      checkpoint_location: "checkpoints-prod"
+    databricks:
+      catalog: "prod_catalog"
+      schema_prefix: ""

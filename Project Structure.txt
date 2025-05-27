@@ -1,0 +1,42 @@
+etl_framework/
+│
+├── widgets/
+│   └── job_control.json          # Widget configuration
+│
+├── configs/
+│   ├── env_config.yaml
+│   ├── job_config/
+│   │   ├── kafka_to_adls.yaml
+│   │   ├── adls_to_bronze.yaml
+│   │   ├── bronze_to_silver.yaml
+│   │   └── silver_to_gold.yaml
+│   └── kafka_config.yaml
+│
+├── notebooks/
+│   ├── 01_kafka_to_adls.py
+│   ├── 02_adls_to_bronze.py
+│   ├── 03_bronze_to_silver.py
+│   └── 04_silver_to_gold.py
+│
+├── libs/
+│   ├── __init__.py
+│   ├── config_loader.py
+│   ├── logger.py
+│   ├── error_handler.py
+│   ├── schema_manager.py
+│   ├── widgets_manager.py        # New widget handling
+│   ├── readers/
+│   │   ├── __init__.py
+│   │   ├── base_reader.py
+│   │   ├── kafka_reader.py
+│   │   ├── delta_reader.py
+│   │   └── file_reader.py
+│   ├── writers/
+│   │   ├── __init__.py
+│   │   ├── base_writer.py
+│   │   ├── delta_writer.py
+│   │   ├── kafka_writer.py
+│   │   └── file_writer.py
+│   └── transformers.py          # Updated transformations
+│
+└── README.md

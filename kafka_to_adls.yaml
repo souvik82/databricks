@@ -1,0 +1,30 @@
+job:
+  name: "user_events_kafka_to_adls"
+  description: "Extract user events from Kafka to ADLS raw zone"
+  
+  source:
+    type: "kafka"
+    topic: "user_events"
+    schema:
+      event_id: { type: "string", nullable: false }
+      user_id: { type: "string", nullable: false }
+      event_time: { type: "timestamp", nullable: false }
+      event_type: { type: "string" }
+      properties: { type: "map<string,string>" }
+      items: { type: "array<struct<item_id:string,quantity:int>>" }
+    options:
+      startingOffsets: "earliest"
+      failOnDataLoss: "false"
+  
+  target:
+    type: "adls"
+    format: "json"
+    path: "raw/user_events"
+    options:
+      compression: "gzip"
+      dateFormat: "yyyy-MM-dd"
+      timestampFormat: "yyyy-MM-dd HH:mm:ss"
+  
+  checkpoint:
+    location: "checkpoints/kafka_to_adls"
+    interval: "5 minutes"

@@ -1,0 +1,38 @@
+job:
+  name: "user_events_bronze_load"
+  description: "Load user events from Kafka to Bronze layer"
+  
+  source:
+    type: "kafka"
+    topic: "user_events"
+    schema: "user_event_schema"
+    options:
+      startingOffsets: "earliest"
+      failOnDataLoss: "false"
+  
+  transformations:
+    - name: "flatten_json"
+      sql: "SELECT *, from_json(value, 'user_event_schema') as parsed_value FROM source_view"
+    - name: "explode_columns"
+      sql: "SELECT *, parsed_value.* FROM flattened_view"
+    - name: "add_metadata"
+      sql: "SELECT *, current_timestamp() as ingestion_time, input_file_name() as source_file FROM exploded_view"
+  
+  target:
+    type: "delta"
+    table: "bronze_user_events"
+    load_strategy: "append"  # options: append, overwrite, upsert, delete_insert
+    partition_columns: ["date(parsed_value.event_time)"]
+    optimize_settings:
+      auto_optimize: true
+      optimize_frequency: "daily"
+      zorder_columns: ["user_id"]
+    vacuum_settings:
+      retain_hours: 168
+      enabled: true
+  
+  archive:
+    enabled: true
+    location: "archive/user_events"
+    format: "json"
+    mode: "append"

@@ -1,0 +1,12 @@
+kafka_config:
+  bootstrap_servers: "your_kafka_bootstrap_servers"
+  security_protocol: "SASL_SSL"
+  sasl_mechanism: "SCRAM-SHA-512"
+  rbac_username: "{{KAFKA_USERNAME}}"
+  rbac_password: "{{KAFKA_PASSWORD}}"
+  consumer_group_id: "databricks_consumer_group"
+  topics:
+    - name: "topic1"
+      schema: "schema1"
+    - name: "topic2"
+      schema: "schema2"
